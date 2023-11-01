@@ -1,0 +1,82 @@
+From 86022cd76d9391f3c93553d1c76a444b2143a4e8 Mon Sep 17 00:00:00 2001
+From: Lianbo Jiang <lijiang@redhat.com>
+Date: Wed, 13 Jul 2022 22:27:33 +0800
+Subject: [PATCH 2/3] Fix for the invalid ring_buffer issue
+
+Kernel commit e028157062b9 ("[kernel] perf: Make struct ring_buffer
+less ambiguous") renamed the struct ring_buffer to struct perf_buffer,
+which cause the following failure:
+
+[0] invalid ring_buffer
+[1] invalid ring_buffer
+[2] invalid ring_buffer
+
+Signed-off-by: Lianbo Jiang <lijiang@redhat.com>
+---
+ ptdump.c | 45 +++++++++++++++++++++++++++++++--------------
+ 1 file changed, 31 insertions(+), 14 deletions(-)
+
+diff --git a/ptdump.c b/ptdump.c
+index 736e1c8cddaf..54e4391739e3 100644
+--- a/ptdump.c
++++ b/ptdump.c
+@@ -114,25 +114,42 @@ int init_pt_info(int cpu)
+ 		struct_ring_buffer);
+ 
+ 	/* symbol access check */
+-	if (STRUCT_EXISTS("ring_buffer") &&
+-	    !MEMBER_EXISTS("ring_buffer", "aux_pages")) {
+-		fprintf(fp, "[%d] invalid ring_buffer\n", cpu);
++	if ((STRUCT_EXISTS("ring_buffer") &&
++	    !MEMBER_EXISTS("ring_buffer", "aux_pages")) ||
++		(STRUCT_EXISTS("perf_buffer") &&
++		 !MEMBER_EXISTS("perf_buffer", "aux_pages"))) {
++		fprintf(fp, "[%d] invalid {ring|perf}_buffer\n", cpu);
+ 		return FALSE;
+ 	}
+ 
+-	/* array of struct pages for pt buffer */
+-	if(!get_member(struct_ring_buffer, "ring_buffer", "aux_pages",
+-		       &aux_pages))
+-		return FALSE;
++	if (STRUCT_EXISTS("ring_buffer")) {
++		/* array of struct pages for pt buffer */
++		if(!get_member(struct_ring_buffer, "ring_buffer", "aux_pages",
++			       &aux_pages))
++			return FALSE;
+ 
+-	/* number of pages */
+-	if(!get_member(struct_ring_buffer, "ring_buffer", "aux_nr_pages",
+-		       &aux_nr_pages))
+-		return FALSE;
++		/* number of pages */
++		if(!get_member(struct_ring_buffer, "ring_buffer", "aux_nr_pages",
++			       &aux_nr_pages))
++			return FALSE;
++
++		/* private data (struct pt_buffer) */
++		if(!get_member(struct_ring_buffer, "ring_buffer", "aux_priv",
++			       &aux_priv))
++			return FALSE;
++	} else if (STRUCT_EXISTS("perf_buffer")) {
++		if(!get_member(struct_ring_buffer, "perf_buffer", "aux_pages",
++					&aux_pages))
++			return FALSE;
+ 
+-	/* private data (struct pt_buffer) */
+-	if(!get_member(struct_ring_buffer, "ring_buffer", "aux_priv",
+-		       &aux_priv))
++		if(!get_member(struct_ring_buffer, "perf_buffer", "aux_nr_pages",
++					&aux_nr_pages))
++			return FALSE;
++
++		if(!get_member(struct_ring_buffer, "perf_buffer", "aux_priv",
++				&aux_priv))
++			return FALSE;
++	} else
+ 		return FALSE;
+ 
+ 	if (!aux_nr_pages) {
+-- 
+2.31.1
+
