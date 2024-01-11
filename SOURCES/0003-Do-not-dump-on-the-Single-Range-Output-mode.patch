@@ -1,0 +1,44 @@
+From 14fe81602c9dd2f64ab803ed9c83b243226a6b05 Mon Sep 17 00:00:00 2001
+From: Lianbo Jiang <lijiang@redhat.com>
+Date: Tue, 19 Jul 2022 13:31:02 +0800
+Subject: [PATCH 3/3] Do not dump on the Single Range Output mode
+
+Kernel commit 670638477aed ("perf/x86/intel/pt: Opportunistically use
+single range output mode") may cause the following failure:
+
+  ptdump: page excluded: kernel virtual address: xxx  type: "struct topa_entry"
+  Cannot read topa table
+
+When working on the Single Range Output mode, not support to dump and
+pint a warning.
+
+Signed-off-by: Lianbo Jiang <lijiang@redhat.com>
+---
+ ptdump.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/ptdump.c b/ptdump.c
+index 54e4391739e3..d48cd0126716 100644
+--- a/ptdump.c
++++ b/ptdump.c
+@@ -189,6 +189,17 @@ int init_pt_info(int cpu)
+ 		dbgprintf(fp, "  %d: 0x%016lx\n", i, page);
+ 	}
+ 
++	if (MEMBER_EXISTS("pt_buffer", "single")) {
++		uint single = 0;
++		if(!get_member(pt_info_ptr->pt_buffer, "pt_buffer", "single", &single)) {
++			fprintf(fp, "failed to read pt_buffer.");
++			return FALSE;
++		}
++
++		if (!!single)
++			error(FATAL, "Not support because of using Single Range Output instead of ToPA.\n");
++        }
++
+ 	/* Get pt registes saved on panic */
+ 	if(!get_member(pt_info_ptr->pt_buffer, "pt_buffer", "cur",
+ 		       &topa_base))
+-- 
+2.31.1
+

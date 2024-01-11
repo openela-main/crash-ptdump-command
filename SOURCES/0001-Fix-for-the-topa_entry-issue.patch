@@ -1,0 +1,34 @@
+From 374cde9c0aeb84da9e993641220c8b23adebab20 Mon Sep 17 00:00:00 2001
+From: Lianbo Jiang <lijiang@redhat.com>
+Date: Wed, 13 Jul 2022 17:23:05 +0800
+Subject: [PATCH 1/3] Fix for the topa_entry issue
+
+kernel commit 59388b9cbe20 ("[x86] perf/x86/intel/pt: Split ToPA metadata
+and page layout") moved out the table of topa entry from struct topa, which
+may cause the following failures:
+[1] invalid kernel virtual address: 0  type: "struct topa_entry"
+[2] current buffer not found
+
+Signed-off-by: Lianbo Jiang <lijiang@redhat.com>
+---
+ ptdump.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/ptdump.c b/ptdump.c
+index f5eb110fe1cd..736e1c8cddaf 100644
+--- a/ptdump.c
++++ b/ptdump.c
+@@ -183,6 +183,10 @@ int init_pt_info(int cpu)
+ 		       &output_off))
+ 		goto out_error;
+ 
++	/* fixup the address of topa table */
++	if (STRUCT_EXISTS("topa_page") && topa_base)
++		topa_base -= MEMBER_SIZE("topa_page", "table");
++
+ 	dbgprintf(fp, "[%d] buf.cur=0x%016lx\n", cpu, topa_base);
+ 	dbgprintf(fp, "[%d] buf.cur_idx=0x%08x\n", cpu, topa_idx);
+ 	dbgprintf(fp, "[%d] buf.output_off=0x%016lx\n", cpu, output_off);
+-- 
+2.31.1
+
